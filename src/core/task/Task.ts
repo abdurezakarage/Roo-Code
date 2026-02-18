@@ -132,6 +132,7 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
+import { loadIntentContext } from "../intent/IntentContextLoader"
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds
@@ -263,6 +264,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @private
 	 */
 	private taskApiConfigReady: Promise<void>
+
+	/**
+	 * The currently selected intent for this task, if any.
+	 * This is set by the select_active_intent tool and used by pre-hooks to
+	 * validate and inject intent-specific context into API requests.
+	 */
+	private activeIntentId: string | undefined
 
 	providerRef: WeakRef<ClineProvider>
 	private readonly globalStoragePath: string
@@ -4269,6 +4277,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				: {}),
 		}
 
+		// Intent pre-hook (The Gatekeeper):
+		// If an active intent has been selected, validate it against active_intents.yaml
+		// and inject the corresponding <intent_context> block into the system prompt.
+		let finalSystemPrompt = systemPrompt
+		try {
+			const workspaceRoot = getWorkspacePath() || this.cwd
+			const intentId = this.getActiveIntentId()
+
+			if (workspaceRoot && intentId) {
+				const intentContext = await loadIntentContext(workspaceRoot, intentId)
+
+				if (!intentContext) {
+					console.warn(
+						`[Task#${this.taskId}] Active intent "${intentId}" not found in .roo/active_intents.yaml. Skipping intent context injection.`,
+					)
+				} else {
+					finalSystemPrompt = `${systemPrompt}\n\n${intentContext.xml}`
+				}
+			}
+		} catch (error) {
+			console.error(
+				`[Task#${this.taskId}] Failed to apply intent pre-hook before API request. Proceeding without intent context.`,
+				error,
+			)
+		}
+
 		// Create an AbortController to allow cancelling the request mid-stream
 		this.currentRequestAbortController = new AbortController()
 		const abortSignal = this.currentRequestAbortController.signal
@@ -4277,7 +4311,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
 		const stream = this.api.createMessage(
-			systemPrompt,
+			finalSystemPrompt,
 			cleanConversationHistory as unknown as Anthropic.Messages.MessageParam[],
 			metadata,
 		)
@@ -4442,6 +4476,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch (err) {
 			console.error("Exponential backoff failed:", err)
 		}
+	}
+
+	/**
+	 * Set the active intent ID for this task.
+	 * Called by the select_active_intent tool once a valid intent has been loaded.
+	 */
+	public setActiveIntentId(intentId: string | undefined): void {
+		this.activeIntentId = intentId || undefined
+	}
+
+	/**
+	 * Get the currently active intent ID for this task, if any.
+	 */
+	public getActiveIntentId(): string | undefined {
+		return this.activeIntentId
 	}
 
 	// Checkpoints
