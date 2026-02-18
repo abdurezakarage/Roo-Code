@@ -2,6 +2,7 @@ import type { ToolName } from "@roo-code/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
+import { enforceToolSecurityPreHook } from "../../hooks/ToolSecurityMiddleware"
 
 /**
  * Callbacks passed to tool execution
@@ -153,6 +154,12 @@ export abstract class BaseTool<TName extends ToolName> {
 			await callbacks.handleError(`parsing ${this.name} args`, new Error(errorMessage))
 			// Note: handleError already emits a tool_result via formatResponse.toolError in the caller.
 			// Do NOT call pushToolResult here to avoid duplicate tool_result payloads.
+			return
+		}
+
+		// Central security middleware: classify and gate tool execution.
+		const allowExecution = await enforceToolSecurityPreHook(this.name, params, task, callbacks.pushToolResult)
+		if (!allowExecution) {
 			return
 		}
 

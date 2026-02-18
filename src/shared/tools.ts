@@ -80,6 +80,7 @@ export const toolParamNames = [
 	// read_file legacy format parameter (backward compatibility)
 	"files",
 	"line_ranges",
+	"intent_id",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -115,6 +116,7 @@ export type NativeToolArgs = {
 	update_todo_list: { todos: string }
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
+	select_active_intent: { intent_id: string }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -288,8 +290,47 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	run_slash_command: "run slash command",
 	skill: "load skill",
 	generate_image: "generate images",
+	select_active_intent: "select active intent",
 	custom_tool: "use custom tools",
 } as const
+
+export type ToolSecurityClassification = "safe" | "destructive"
+
+/**
+ * Static classification of tools into safe vs destructive categories.
+ * - "safe": read-only or non-mutating operations
+ * - "destructive": write, delete, execute, or otherwise side-effecting operations
+ *
+ * This is used by the ToolSecurityMiddleware to enforce intent boundaries and
+ * require explicit user approval for risky operations.
+ */
+export const TOOL_SECURITY_CLASSIFICATION: Record<ToolName, ToolSecurityClassification> = {
+	execute_command: "destructive",
+	read_file: "safe",
+	read_command_output: "safe",
+	write_to_file: "destructive",
+	apply_diff: "destructive",
+	edit: "destructive",
+	search_and_replace: "destructive",
+	search_replace: "destructive",
+	edit_file: "destructive",
+	apply_patch: "destructive",
+	search_files: "safe",
+	list_files: "safe",
+	use_mcp_tool: "destructive",
+	access_mcp_resource: "safe",
+	ask_followup_question: "safe",
+	attempt_completion: "safe",
+	switch_mode: "safe",
+	new_task: "safe",
+	codebase_search: "safe",
+	update_todo_list: "safe",
+	run_slash_command: "safe",
+	skill: "safe",
+	generate_image: "destructive",
+	select_active_intent: "safe",
+	custom_tool: "destructive",
+}
 
 // Define available tool groups.
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
@@ -321,6 +362,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	"select_active_intent",
 ] as const
 
 /**

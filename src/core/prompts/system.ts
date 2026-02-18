@@ -82,7 +82,12 @@ async function generatePrompt(
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
 
+	const intentHandshakeSection = `You are an Intent-Driven Architect. You CANNOT write code immediately.
+Your first action MUST be to analyze the user request and call the select_active_intent tool to load the necessary context before using any other tools or writing code.`
+
 	const basePrompt = `${roleDefinition}
+
+${intentHandshakeSection}
 
 ${markdownFormattingSection()}
 
