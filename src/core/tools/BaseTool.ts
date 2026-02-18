@@ -2,7 +2,7 @@ import type { ToolName } from "@roo-code/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
-import { enforceToolSecurityPreHook } from "./ToolSecurityMiddleware"
+import { enforceToolSecurityPreHook } from "../../hooks/ToolSecurityMiddleware"
 
 /**
  * Callbacks passed to tool execution
