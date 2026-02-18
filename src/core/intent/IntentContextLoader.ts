@@ -1,5 +1,5 @@
-import * as fs from "fs/promises"
-import * as path from "path"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 
 import * as yaml from "yaml"
 
@@ -12,6 +12,7 @@ interface RawIntentEntry {
 	intent_id?: string
 	constraints?: string
 	scope?: string
+	owned_scope?: string | string[]
 	// Allow arbitrary additional properties without enforcing a schema.
 	[key: string]: unknown
 }
@@ -32,6 +33,7 @@ export interface LoadedIntentContext {
 	scope?: string
 	agentTraces: RawAgentTraceEntry[]
 	xml: string
+	ownedScope?: string[]
 }
 
 /**
@@ -40,11 +42,11 @@ export interface LoadedIntentContext {
 function escapeXml(value: string | undefined): string {
 	if (!value) return ""
 	return value
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;")
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&apos;")
 }
 
 async function loadYamlFile<T = unknown>(filePath: string): Promise<T | undefined> {
@@ -167,6 +169,14 @@ export async function loadIntentContext(
 
 	const agentTraces = findAgentTraces(tracesDoc, intentId)
 
+	let ownedScope: string[] | undefined
+	const rawOwnedScope = intent.owned_scope
+	if (typeof rawOwnedScope === "string") {
+		ownedScope = [rawOwnedScope]
+	} else if (Array.isArray(rawOwnedScope)) {
+		ownedScope = rawOwnedScope.filter((entry): entry is string => typeof entry === "string")
+	}
+
 	const xml = buildIntentContextXml(intentId, constraints, scope, agentTraces)
 
 	return {
@@ -174,6 +184,7 @@ export async function loadIntentContext(
 		constraints,
 		scope,
 		agentTraces,
+		ownedScope,
 		xml,
 	}
 }
