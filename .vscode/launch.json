@@ -10,10 +10,10 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"runtimeExecutable": "${execPath}",
-			"args": ["--extensionDevelopmentPath=${workspaceFolder}/src"],
+			"args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/vscode-nightly/build"],
 			"sourceMaps": true,
-			"outFiles": ["${workspaceFolder}/src/dist/**/*.js"],
-			"preLaunchTask": "${defaultBuildTask}",
+			"outFiles": ["${workspaceFolder}/apps/vscode-nightly/build/dist/**/*.js"],
+			"preLaunchTask": "bundle:nightly",
 			"env": {
 				"NODE_ENV": "development",
 				"VSCODE_DEBUG_MODE": "true"

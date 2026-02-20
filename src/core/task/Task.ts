@@ -70,7 +70,7 @@ import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "../../shared/getApiMetrics"
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import { DiffStrategy, type ToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
+import { DiffStrategy, type ToolUse, type ToolParamName, type PushToolResult, toolParamNames } from "../../shared/tools"
 import { getModelMaxOutputTokens } from "../../shared/api"
 
 // services
@@ -100,6 +100,7 @@ import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
 import { restoreTodoListForTask } from "../tools/UpdateTodoListTool"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
+import { FileHashTracker } from "../context-tracking/FileHashTracker"
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
@@ -132,8 +133,11 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
-import { loadIntentContext } from "../intent/IntentContextLoader"
 
+// import
+import { loadIntentContext } from "../../hooks/IntentContextLoader"
+import { enforceToolSecurityPreHook } from "../../hooks/ToolSecurityMiddleware"
+import { logAgentTrace } from "../../hooks"
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds
 const FORCED_CONTEXT_REDUCTION_PERCENT = 75 // Keep 75% of context (remove 25%) on context window errors
@@ -307,6 +311,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	rooIgnoreController?: RooIgnoreController
 	rooProtectedController?: RooProtectedController
 	fileContextTracker: FileContextTracker
+	fileHashTracker: FileHashTracker
 	terminalProcess?: RooTerminalProcess
 
 	// Editing
@@ -490,6 +495,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.rooIgnoreController = new RooIgnoreController(this.cwd)
 		this.rooProtectedController = new RooProtectedController(this.cwd)
 		this.fileContextTracker = new FileContextTracker(provider, this.taskId)
+		this.fileHashTracker = new FileHashTracker()
 
 		this.rooIgnoreController.initialize().catch((error) => {
 			console.error("Failed to initialize RooIgnoreController:", error)
@@ -3021,6 +3027,39 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								// Present the tool call to user - presentAssistantMessage will execute
 								// tools sequentially and accumulate all results in userMessageContent
 								presentAssistantMessage(this)
+
+								// After tool execution, check if it was a write_to_file and log trace
+								if (chunk.name === "write_to_file") {
+									const activeIntentId = this.getActiveIntentId()
+									if (activeIntentId) {
+										try {
+											const parsedArgs = JSON.parse(chunk.arguments || "{}")
+											const filePath =
+												typeof parsedArgs?.path === "string" ? parsedArgs.path : undefined
+											const content =
+												typeof parsedArgs?.content === "string" ? parsedArgs.content : ""
+
+											if (filePath) {
+												setTimeout(async () => {
+													try {
+														await logAgentTrace({
+															intentId: activeIntentId,
+															workspaceRoot: getWorkspacePath() || this.cwd,
+															filePath,
+															content,
+															timestamp: new Date().toISOString(),
+															modelIdentifier: this.cachedStreamingModel?.id,
+														})
+													} catch (error) {
+														console.error("[Task] Failed to log agent trace:", error)
+													}
+												}, 100)
+											}
+										} catch {
+											// Ignore invalid tool args payloads for trace logging.
+										}
+									}
+								}
 								break
 							}
 							case "text": {
@@ -4491,6 +4530,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	public getActiveIntentId(): string | undefined {
 		return this.activeIntentId
+	}
+
+	/**
+	 * Run security middleware before executing a tool.
+	 * This is invoked from the assistant message execution path.
+	 */
+	public async runToolSecurityPreHook(
+		toolName: ToolName,
+		params: any,
+		pushToolResult: PushToolResult,
+	): Promise<boolean> {
+		return enforceToolSecurityPreHook(toolName, params, this, pushToolResult)
 	}
 
 	// Checkpoints

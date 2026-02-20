@@ -218,6 +218,9 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 					const fileContent = buffer.toString("utf-8")
 					const result = this.processTextFile(fileContent, entry)
 
+					// Phase 4: Store content hash for optimistic locking
+					task.fileHashTracker.storeFileHash(relPath, fileContent)
+
 					await task.fileContextTracker.trackFileContext(relPath, "read_tool" as RecordSource)
 
 					updateFileResult(relPath, {
@@ -795,6 +798,9 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				}
 
 				results.push(`File: ${relPath}\n${content}`)
+
+				// Phase 4: Store content hash for optimistic locking
+				task.fileHashTracker.storeFileHash(relPath, rawContent)
 
 				// Track file in context
 				await task.fileContextTracker.trackFileContext(relPath, "read_tool")

@@ -38,6 +38,7 @@ import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { selectActiveIntentTool } from "../tools/SelectActiveIntentTool"
+import { recordLessonTool } from "../tools/RecordLessonTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -270,6 +271,48 @@ export async function presentAssistantMessage(cline: Task) {
 				},
 			}
 
+			if (!mcpBlock.partial) {
+				const allowed = await cline.runToolSecurityPreHook(
+					"use_mcp_tool",
+					syntheticToolUse.nativeArgs || syntheticToolUse.params,
+					(result) => {
+						if (hasToolResult) {
+							return
+						}
+
+						const resultText =
+							typeof result === "string"
+								? result
+								: result
+										.filter((item) => item.type === "text")
+										.map((item) => (item as Anthropic.TextBlockParam).text)
+										.join("\n") || "(tool did not return anything)"
+
+						let isError = false
+						try {
+							const parsed = JSON.parse(resultText)
+							isError = parsed?.type === "tool_error"
+						} catch {
+							// Not JSON - treat as normal tool result text.
+						}
+
+						if (toolCallId) {
+							cline.pushToolResultToUserContent({
+								type: "tool_result",
+								tool_use_id: sanitizeToolUseId(toolCallId),
+								content: resultText,
+								is_error: isError,
+							})
+						}
+						hasToolResult = true
+					},
+				)
+
+				if (!allowed) {
+					break
+				}
+			}
+
 			await useMcpToolTool.handle(cline, syntheticToolUse, {
 				askApproval,
 				handleError,
@@ -371,6 +414,8 @@ export async function presentAssistantMessage(cline: Task) {
 					case "read_command_output":
 						return `[${block.name} for '${block.params.artifact_id}']`
 					case "update_todo_list":
+						return `[${block.name}]`
+					case "record_lesson":
 						return `[${block.name}]`
 					case "new_task": {
 						const mode = block.params.mode ?? defaultModeSlug
@@ -676,6 +721,47 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
+			// Before executing any complete tool, run the security pre-hook.
+			if (!block.partial) {
+				const allowed = await cline.runToolSecurityPreHook(
+					block.name as ToolName,
+					block.nativeArgs || block.params,
+					(result) => {
+						if (hasToolResult) {
+							return
+						}
+
+						const resultText =
+							typeof result === "string"
+								? result
+								: result
+										.filter((item) => item.type === "text")
+										.map((item) => (item as Anthropic.TextBlockParam).text)
+										.join("\n") || "(tool did not return anything)"
+
+						let isError = false
+						try {
+							const parsed = JSON.parse(resultText)
+							isError = parsed?.type === "tool_error"
+						} catch {
+							// Not JSON - treat as normal tool result text.
+						}
+
+						cline.pushToolResultToUserContent({
+							type: "tool_result",
+							tool_use_id: sanitizeToolUseId(toolCallId),
+							content: resultText,
+							is_error: isError,
+						})
+						hasToolResult = true
+					},
+				)
+
+				if (!allowed) {
+					break
+				}
+			}
+
 			switch (block.name) {
 				case "write_to_file":
 					await checkpointSaveAndMark(cline)
@@ -815,6 +901,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "select_active_intent":
 					await selectActiveIntentTool.handle(cline, block as ToolUse<"select_active_intent">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "record_lesson":
+					await recordLessonTool.handle(cline, block as ToolUse<"record_lesson">, {
 						askApproval,
 						handleError,
 						pushToolResult,

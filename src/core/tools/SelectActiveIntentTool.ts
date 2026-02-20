@@ -1,5 +1,4 @@
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 
@@ -23,7 +22,14 @@ export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
 				task.consecutiveMistakeCount++
 				task.recordToolError("select_active_intent")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(formatResponse.toolError("intent_id is required for select_active_intent"))
+				pushToolResult(
+					JSON.stringify({
+						type: "tool_error",
+						tool: "select_active_intent",
+						reason: "missing_intent_id",
+						message: "intent_id is required for select_active_intent",
+					}),
+				)
 				return
 			}
 
@@ -37,10 +43,12 @@ export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
 				task.recordToolError("select_active_intent")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(
-					formatResponse.toolError(
-						`No matching intent found for id "${intentId}" in .roo/active_intents.yaml. ` +
-							"Ensure the ID exists and is spelled correctly.",
-					),
+					JSON.stringify({
+						type: "tool_error",
+						tool: "select_active_intent",
+						reason: "intent_not_found",
+						message: `Intent "${intentId}" not found in .roo/active_intents.yaml`,
+					}),
 				)
 				return
 			}
@@ -49,7 +57,7 @@ export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
 			task.setActiveIntentId(context.intentId)
 
 			// Return the XML block as the tool result. This is what the model will consume.
-			pushToolResult(formatResponse.toolResult(context.xml))
+			pushToolResult(context.xml)
 		} catch (error) {
 			await handleError("select active intent", error as Error)
 		}
