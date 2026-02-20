@@ -39,6 +39,16 @@ export const formatResponse = {
 			suggestion: "Try to continue without this file, or ask the user to update the .rooignore file",
 		}),
 
+	staleFileError: (path: string) =>
+		JSON.stringify({
+			status: "error",
+			type: "stale_file",
+			message: "File was modified by another agent or human. Write blocked to prevent overwriting.",
+			path,
+			suggestion:
+				"Re-read the file using read_file tool to get the latest content, then retry the write operation.",
+		}),
+
 	noToolsUsed: () => {
 		const instructions = getToolInstructionsReminder()
 

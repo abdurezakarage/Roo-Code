@@ -51,6 +51,19 @@ export abstract class BaseTool<TName extends ToolName> {
 	abstract execute(params: ToolParams<TName>, task: Task, callbacks: ToolCallbacks): Promise<void>
 
 	/**
+	 * Post-execution hook called after successful tool execution.
+	 * Override this method to perform post-execution tasks like logging, tracing, etc.
+	 *
+	 * @param params - The parameters that were used for execution
+	 * @param task - Task instance
+	 * @param callbacks - Tool execution callbacks
+	 */
+	async postExecute(params: ToolParams<TName>, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		// Default: no-op
+		// Tools can override to add post-execution behavior
+	}
+
+	/**
 	 * Handle partial (streaming) tool messages.
 	 *
 	 * Default implementation does nothing. Tools that support streaming
@@ -165,5 +178,13 @@ export abstract class BaseTool<TName extends ToolName> {
 
 		// Execute with typed parameters
 		await this.execute(params, task, callbacks)
+
+		// Post-execution hook (only called if execution succeeded)
+		try {
+			await this.postExecute(params, task, callbacks)
+		} catch (error) {
+			// Log post-execution errors but don't fail the tool execution
+			console.error(`Error in postExecute for ${this.name}:`, error)
+		}
 	}
 }

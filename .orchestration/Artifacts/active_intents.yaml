@@ -1,0 +1,10 @@
+active_intents:
+  - id: "INT-001"
+    name: "Weather API"
+    status: "IN_PROGRESS"
+    owned_scope: 
+      - "src/api/weather/**"
+    constraints:
+      - "Must use OpenWeatherMap API"
+    acceptance_criteria:
+      - "Returns temperature data"
