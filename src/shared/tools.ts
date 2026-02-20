@@ -297,6 +297,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	skill: "load skill",
 	generate_image: "generate images",
 	select_active_intent: "select active intent",
+	record_lesson: "record lessons",
 	custom_tool: "use custom tools",
 } as const
 
@@ -335,6 +336,7 @@ export const TOOL_SECURITY_CLASSIFICATION: Record<ToolName, ToolSecurityClassifi
 	skill: "safe",
 	generate_image: "destructive",
 	select_active_intent: "safe",
+	record_lesson: "destructive",
 	custom_tool: "destructive",
 }
 
