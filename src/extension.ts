@@ -143,6 +143,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		console.warn("Failed to register PostHogTelemetryClient:", error)
 	}
 
+	// Initialize hook registry with default hooks
+	try {
+		const { hookRegistry, ToolSecurityPreHook, AgentTracePostHook } = await import("./hooks")
+		hookRegistry.registerPreHook(new ToolSecurityPreHook())
+		hookRegistry.registerPostHook(new AgentTracePostHook())
+		outputChannel.appendLine("[HookRegistry] Registered default hooks: tool-security, agent-trace")
+	} catch (error) {
+		outputChannel.appendLine(
+			`[HookRegistry] Failed to initialize hooks: ${error instanceof Error ? error.message : String(error)}`,
+		)
+	}
+
 	// Create logger for cloud services.
 	const cloudLogger = createDualLogger(createOutputChannelLogger(outputChannel))
 

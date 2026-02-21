@@ -4329,7 +4329,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				if (!intentContext) {
 					console.warn(
-						`[Task#${this.taskId}] Active intent "${intentId}" not found in .roo/active_intents.yaml. Skipping intent context injection.`,
+						`[Task#${this.taskId}] Active intent "${intentId}" not found in .orchestration/active_intents.yaml. Skipping intent context injection.`,
 					)
 				} else {
 					finalSystemPrompt = `${systemPrompt}\n\n${intentContext.xml}`

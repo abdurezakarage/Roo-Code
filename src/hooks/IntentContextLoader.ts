@@ -63,6 +63,24 @@ async function loadYamlFile<T = unknown>(filePath: string): Promise<T | undefine
 	}
 }
 
+/**
+ * Load JSON Lines file (agent_trace.jsonl) and parse all entries.
+ */
+async function loadJsonLinesFile<T = unknown>(filePath: string): Promise<T[]> {
+	try {
+		const raw = await fs.readFile(filePath, "utf8")
+		const lines = raw.split("\n").filter((line) => line.trim().length > 0)
+		return lines.map((line) => JSON.parse(line) as T)
+	} catch (error: any) {
+		// Silently ignore missing files; this hook is optional.
+		if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+			return []
+		}
+		console.error(`[IntentContextLoader] Failed to read JSON Lines file at ${filePath}:`, error)
+		return []
+	}
+}
+
 function findIntentEntry(doc: any, intentId: string): RawIntentEntry | undefined {
 	if (!doc) return undefined
 
@@ -83,19 +101,10 @@ function findIntentEntry(doc: any, intentId: string): RawIntentEntry | undefined
 	})
 }
 
-function findAgentTraces(doc: any, intentId: string): RawAgentTraceEntry[] {
-	if (!doc) return []
+function findAgentTraces(entries: RawAgentTraceEntry[], intentId: string): RawAgentTraceEntry[] {
+	if (!entries || !Array.isArray(entries)) return []
 
-	let allEntries: RawAgentTraceEntry[] | undefined
-	if (Array.isArray(doc)) {
-		allEntries = doc
-	} else if (Array.isArray(doc?.traces)) {
-		allEntries = doc.traces
-	}
-
-	if (!allEntries) return []
-
-	return allEntries.filter((entry) => {
+	return entries.filter((entry) => {
 		if (!entry || typeof entry !== "object") return false
 		const entryIntentId = entry.intent_id ?? entry.intentId
 		return typeof entryIntentId === "string" && entryIntentId === intentId
@@ -142,9 +151,9 @@ function buildIntentContextXml(
  * - active_intents.yaml to locate the matching intent entry
  * - agent_traces.yaml (if present) to collect related trace entries
  *
- * Both files are expected to live under a .roo folder at the given workspaceRoot:
- *   {workspaceRoot}/.roo/active_intents.yaml
- *   {workspaceRoot}/.roo/agent_traces.yaml
+ * Both files are expected to live under a .orchestration folder at the given workspaceRoot:
+ *   {workspaceRoot}/.orchestration/active_intents.yaml
+ *   {workspaceRoot}/.orchestration/agent_trace.jsonl
  *
  * If either file is missing or the intent cannot be found, this returns undefined.
  */
@@ -156,10 +165,13 @@ export async function loadIntentContext(
 		return undefined
 	}
 
-	const intentsPath = path.join(workspaceRoot, ".roo", "active_intents.yaml")
-	const tracesPath = path.join(workspaceRoot, ".roo", "agent_traces.yaml")
+	const intentsPath = path.join(workspaceRoot, ".orchestration", "active_intents.yaml")
+	const tracesPath = path.join(workspaceRoot, ".orchestration", "agent_trace.jsonl")
 
-	const [intentsDoc, tracesDoc] = await Promise.all([loadYamlFile(intentsPath), loadYamlFile(tracesPath)])
+	const [intentsDoc, traceEntries] = await Promise.all([
+		loadYamlFile(intentsPath),
+		loadJsonLinesFile<RawAgentTraceEntry>(tracesPath),
+	])
 
 	const intent = findIntentEntry(intentsDoc, intentId)
 	if (!intent) {
@@ -169,7 +181,7 @@ export async function loadIntentContext(
 	const constraints = typeof intent.constraints === "string" ? intent.constraints : undefined
 	const scope = typeof intent.scope === "string" ? intent.scope : undefined
 
-	const agentTraces = findAgentTraces(tracesDoc, intentId)
+	const agentTraces = findAgentTraces(traceEntries, intentId)
 
 	let ownedScope: string[] | undefined
 	const rawOwnedScope = intent.owned_scope
