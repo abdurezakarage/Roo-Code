@@ -2,7 +2,7 @@ import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 
-import { loadIntentContext } from "../intent/IntentContextLoader"
+import { loadIntentContext } from "../../hooks/IntentContextLoader"
 import { getWorkspacePath } from "../../utils/path"
 
 interface SelectActiveIntentParams {
@@ -47,7 +47,7 @@ export class SelectActiveIntentTool extends BaseTool<"select_active_intent"> {
 						type: "tool_error",
 						tool: "select_active_intent",
 						reason: "intent_not_found",
-						message: `Intent "${intentId}" not found in .roo/active_intents.yaml`,
+						message: `Intent "${intentId}" not found in .orchestration/active_intents.yaml`,
 					}),
 				)
 				return

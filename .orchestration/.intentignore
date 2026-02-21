@@ -1,0 +1,7 @@
+# Intent Ignore File
+# List intent IDs that should be excluded from agent operations.
+# One intent ID per line.
+
+# Example:
+# INT-003
+# INT-004

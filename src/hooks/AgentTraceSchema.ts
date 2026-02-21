@@ -49,6 +49,14 @@ export interface AgentTraceEntry {
 	ranges: {
 		content_hash: string
 	}
+
+	/**
+	 * VCS revision ID (e.g., git commit hash) at the time of mutation
+	 */
+	vcs?: {
+		revision: string
+		branch?: string
+	}
 }
 
 /**
@@ -62,6 +70,8 @@ export interface AgentTraceParams {
 	mutationClass: "AST_REFACTOR" | "INTENT_EVOLUTION"
 	modelIdentifier?: string
 	relatedReqIds?: string[]
+	vcsRevision?: string
+	vcsBranch?: string
 }
 
 import { generateContentHash } from "../utils/spatial-hash"
@@ -75,7 +85,7 @@ import { generateContentHash } from "../utils/spatial-hash"
 export function createAgentTraceEntry(params: AgentTraceParams): AgentTraceEntry {
 	const contentHash = generateContentHash(params.content)
 
-	return {
+	const entry: AgentTraceEntry = {
 		req_id: params.reqId,
 		intent_id: params.intentId,
 		file: params.filePath,
@@ -88,4 +98,16 @@ export function createAgentTraceEntry(params: AgentTraceParams): AgentTraceEntry
 			content_hash: contentHash,
 		},
 	}
+
+	// Add VCS information if available
+	if (params.vcsRevision) {
+		entry.vcs = {
+			revision: params.vcsRevision,
+		}
+		if (params.vcsBranch) {
+			entry.vcs.branch = params.vcsBranch
+		}
+	}
+
+	return entry
 }

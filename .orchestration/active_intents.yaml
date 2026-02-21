@@ -1,0 +1,43 @@
+# Active Intents Configuration
+# This file defines the active intents that agents can work on.
+# Each intent represents a specific feature, task, or goal.
+
+intents:
+  - id: INT-001
+    intent_id: INT-001
+    constraints: |
+      Build a Weather API that:
+      - Accepts city name as input
+      - Returns current weather conditions
+      - Uses a free weather API service (e.g., OpenWeatherMap)
+      - Implements proper error handling
+      - Returns JSON format
+    scope: |
+      Weather API implementation including:
+      - API endpoint creation
+      - External API integration
+      - Error handling
+      - Response formatting
+    owned_scope:
+      - "src/api/weather/**"
+      - "src/utils/weather/**"
+      - "tests/weather/**"
+
+  - id: INT-002
+    intent_id: INT-002
+    constraints: |
+      Implement user authentication system:
+      - JWT-based authentication
+      - Password hashing with bcrypt
+      - Session management
+      - Protected routes
+    scope: |
+      Authentication system including:
+      - User registration
+      - Login/logout
+      - Token generation and validation
+      - Middleware for route protection
+    owned_scope:
+      - "src/auth/**"
+      - "src/middleware/auth/**"
+      - "tests/auth/**"

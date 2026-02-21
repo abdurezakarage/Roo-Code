@@ -16,9 +16,6 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
 import type { ToolUse } from "../../shared/tools"
 import { generateContentHash } from "../../utils/spatial-hash"
-import { createAgentTraceEntry } from "../../hooks/AgentTraceSchema"
-import { appendAgentTrace } from "../../hooks/AgentTraceLogger"
-import { getWorkspacePath } from "../../utils/path"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -73,7 +70,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			task.diffViewProvider.editType = fileExists ? "modify" : "create"
 		}
 
-		// Phase 4: Optimistic Locking - Check if file was modified since last read
+		// Optimistic Locking - Check if file was modified since last read
 		if (fileExists) {
 			try {
 				const currentContent = await fs.readFile(absolutePath, "utf-8")
@@ -223,31 +220,13 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 	}
 
 	/**
-	 * Post-execution hook: Log agent trace entry to agent_trace.jsonl
-	 * Called only after successful file write to ensure traceability.
+	 * Post-execution hook: Trace logging is now handled by AgentTracePostHook.
+	 * This method is kept for backward compatibility but delegates to the hook registry.
+	 * The hook registry will call AgentTracePostHook automatically.
 	 */
-	override async postExecute(params: WriteToFileParams, task: Task, _callbacks: ToolCallbacks): Promise<void> {
-		try {
-			const workspaceRoot = getWorkspacePath() || task.cwd
-			const modelIdentifier = task.api.getModel().id
-
-			// Create trace entry with REQ-ID injected into related array
-			const traceEntry = createAgentTraceEntry({
-				reqId: task.taskId, // REQ-ID from Phase 1
-				intentId: params.intent_id,
-				filePath: params.path,
-				content: params.content,
-				mutationClass: params.mutation_class,
-				modelIdentifier,
-				relatedReqIds: [task.taskId], // Inject REQ-ID into related array
-			})
-
-			// Append to agent_trace.jsonl (JSON Lines format)
-			await appendAgentTrace(workspaceRoot, traceEntry)
-		} catch (error) {
-			// Log but don't fail - trace logging is non-critical
-			console.error("[WriteToFileTool] Failed to log agent trace:", error)
-		}
+	override async postExecute(params: WriteToFileParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		// Trace logging is handled by the hook registry (AgentTracePostHook)
+		// This method can be used for tool-specific post-execution logic if needed
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"write_to_file">): Promise<void> {

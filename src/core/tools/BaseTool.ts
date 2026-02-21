@@ -2,7 +2,7 @@ import type { ToolName } from "@roo-code/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
-import { enforceToolSecurityPreHook } from "../../hooks/ToolSecurityMiddleware"
+import { hookRegistry } from "../../hooks/HookRegistry"
 
 /**
  * Callbacks passed to tool execution
@@ -170,8 +170,8 @@ export abstract class BaseTool<TName extends ToolName> {
 			return
 		}
 
-		// Central security middleware: classify and gate tool execution.
-		const allowExecution = await enforceToolSecurityPreHook(this.name, params, task, callbacks.pushToolResult)
+		// Execute pre-hooks through the hook registry
+		const allowExecution = await hookRegistry.executePreHooks(this.name, params, task, callbacks.pushToolResult)
 		if (!allowExecution) {
 			return
 		}
@@ -179,12 +179,20 @@ export abstract class BaseTool<TName extends ToolName> {
 		// Execute with typed parameters
 		await this.execute(params, task, callbacks)
 
-		// Post-execution hook (only called if execution succeeded)
+		// Execute tool-specific postExecute (for backward compatibility)
 		try {
 			await this.postExecute(params, task, callbacks)
 		} catch (error) {
 			// Log post-execution errors but don't fail the tool execution
 			console.error(`Error in postExecute for ${this.name}:`, error)
+		}
+
+		// Execute post-hooks through the hook registry
+		try {
+			await hookRegistry.executePostHooks(this.name, params, task, callbacks)
+		} catch (error) {
+			// Log post-hook errors but don't fail the tool execution
+			console.error(`Error in post-hooks for ${this.name}:`, error)
 		}
 	}
 }

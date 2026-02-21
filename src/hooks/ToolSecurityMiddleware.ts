@@ -10,7 +10,7 @@ import { getWorkspacePath, toRelativePath } from "../utils/path"
 import type { PushToolResult } from "../shared/tools"
 import { TOOL_SECURITY_CLASSIFICATION, type ToolSecurityClassification } from "../shared/tools"
 
-type JsonToolErrorReason = "intent_ignored" | "scope_violation" | "user_rejected"
+type JsonToolErrorReason = "intent_ignored" | "scope_violation" | "user_rejected" | "missing_intent_id"
 
 interface JsonToolErrorPayload {
 	type: "tool_error"
@@ -147,6 +147,14 @@ export async function enforceToolSecurityPreHook(
 	// Determine workspace and active intent (if any).
 	const workspaceRoot = getWorkspacePath() || task.cwd
 	const intentId = task.getActiveIntentId()
+
+	// Gatekeeper: Block destructive tools without an active intent_id.
+	// Exception: select_active_intent itself is allowed (it's how you set the intent).
+	if (!intentId && toolName !== "select_active_intent") {
+		const message = `You must cite a valid active Intent ID. Call select_active_intent first before using destructive tools.`
+		pushToolResult(buildJsonToolError(toolName, "missing_intent_id", message))
+		return false
+	}
 
 	// 1) .intentignore enforcement: block destructive tools for ignored intents.
 	if (workspaceRoot && intentId) {
